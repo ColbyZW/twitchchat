@@ -1,6 +1,8 @@
 use std::net::{TcpStream};
-use std::io::{Write, BufReader, BufRead};
+use std::io::{Write, BufRead, BufReader};
 use std::thread;
+use std::ops::DerefMut;
+use std::sync::{Mutex, Arc};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
@@ -99,7 +101,7 @@ impl ChatMessage {
 
 
 pub struct ChatStream {
-    pub stream: TcpStream
+    pub stream: Arc<Mutex<TcpStream>>
 }
 
 impl ChatStream {
@@ -108,6 +110,7 @@ impl ChatStream {
         if let Ok(mut stream) = TcpStream::connect("irc.chat.twitch.tv:6667") {
             if let Ok(()) = ChatStream::handshake(&cfg, &mut stream) {
                 if let Ok(_) = stream.set_read_timeout(Some(Duration::from_secs(60 * 10))) {
+                    let stream: Arc<Mutex<TcpStream>> = Arc::new(Mutex::new(stream));
                     return Ok(ChatStream { stream });
                 } else {
                     return Err("Unable to set timeout on TcpStream");
@@ -130,18 +133,19 @@ impl ChatStream {
     }
 
     fn handle_message(
-        res_stream: &mut TcpStream, 
+        stream: &mut TcpStream,
         message: &ChatMessage, 
         handler: fn(&ChatMessage) -> ()
         ) {
          match message.kind {
             MessageType::PING => {
-                ChatStream::ping(res_stream, &message);
+                ChatStream::ping(stream, &message);
             },
             MessageType::PRIVMSG => {
                 handler(&message);
             },
             MessageType::NONE => {
+                handler(&message);
             },
         };
     }
@@ -149,25 +153,21 @@ impl ChatStream {
     // Registers a callback to run on messages
     pub fn on_message(self: &Self, handler: fn(&ChatMessage) -> ()) 
         -> Result<JoinHandle<()>, &'static str> {
-        if let Ok(stream) = self.stream.try_clone() {
-            let mut res_stream = self.stream.try_clone()
-                .expect("Unable to get handle on stream");
-
+        let stream = self.stream.clone();
+        if let Ok(mut write_stream) = self.stream.lock().unwrap().try_clone() {
             let handle = thread::spawn(move || {
-                let reader = BufReader::new(stream);
+                let mut stream = stream.lock().unwrap();
+                let reader = BufReader::new(stream.deref_mut());
                 for res in reader.lines() {
-                    match res {
-                        Ok(line) => {
-                            let msg = ChatMessage::new(&line);
-                            ChatStream::handle_message(&mut res_stream, &msg, handler);
-                        },
-                        _ => {},
-                    }
+                    if let Ok(line) = res {
+                        let msg = ChatMessage::new(&line);
+                        ChatStream::handle_message(&mut write_stream, &msg, handler);
+                    };
                 }
             });
             return Ok(handle);
         } else {
-            return Err("Couldn't register onMessage callback");
+            return Err("Unable to get Mutable clone of Stream");
         }
     }
 
