@@ -5,6 +5,7 @@ use std::ops::DerefMut;
 use std::sync::{Mutex, Arc};
 use std::thread::JoinHandle;
 use std::time::Duration;
+use std::collections::HashMap;
 
 pub struct Config {
     pub pass: String,
@@ -52,10 +53,61 @@ pub enum MessageType {
     NONE
 }
 
+pub struct Tags {
+    pub badges: HashMap<String, HashMap<String, String>>,
+    pub tags: HashMap<String, String>
+}
+
+impl Tags {
+    pub fn new(tags: &str) -> Self {
+        let mut tag_set: HashMap<String, String> = HashMap::new();
+        let mut badge_set: HashMap<String, HashMap<String, String>> = HashMap::new();
+        let parsed_tags: Vec<&str> = tags.split(";").collect();
+
+        for tag in parsed_tags {
+            let tag_pair: Vec<&str> = tag.split("=").collect();
+            if let Some(value) = tag_pair.get(1) {
+
+                if let Some(key) = tag_pair.get(0) {
+
+                    if *key == "badges" || *key == "badge-info" {
+                        let badges: Vec<&str> = value.split(",").collect();
+
+                        for badge in badges {
+                            let mut sub_badge_set: HashMap<String, String> = HashMap::new();
+                            let badge_parts: Vec<&str> = badge.split('/').collect();
+                            if badge_parts.len() >= 2 {
+
+                                sub_badge_set.insert(badge_parts[0].to_string(), badge_parts[1].to_string());
+                            }
+                            badge_set.insert((*key).to_string(), sub_badge_set);
+                        }
+                    } else {
+                        tag_set.insert((*key).to_string(), value.to_string());
+                    }
+                };
+            };
+        }
+
+        Self {
+            tags: tag_set,
+            badges: badge_set
+        }
+    }
+
+    pub fn empty() -> Self {
+        Self {
+            tags: HashMap::new(),
+            badges: HashMap::new()
+        }
+    }
+}
+
 pub struct ChatMessage {
     pub user: String,
     pub message: String,
-    pub kind: MessageType
+    pub kind: MessageType,
+    pub tags: Tags
 }
 
 impl ChatMessage {
@@ -65,18 +117,30 @@ impl ChatMessage {
             user: String::new(),
             message: String::new(),
             kind: MessageType::NONE,
+            tags: Tags::empty()
         };
 
-        if &message[0..1] == ":" {
+        if &message[0..1] == "@" {
             if let Some(end) = message.find(" ") {
-                let source = &message[idx+1..end];
+                let tags_string = &message[idx+1..end];
+                idx = end+1;
+                let tags: Tags = Tags::new(&tags_string);
+                chat_msg.tags = tags;
+            }
+        }
+
+
+        let message = &message[idx..];
+        if let Some(colon) = message.find(":") {
+            if let Some(end) = message.find(" ") {
+                let source = &message[colon+1..end];
                 idx = end;
                 let user: Vec<&str> = source.split("!").collect();
                 if let Some(name) = user.get(0) {
                     chat_msg.user.push_str(name);
                 };
             };
-        }
+        };
 
 
         let message = &message[idx..];

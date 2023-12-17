@@ -6,7 +6,7 @@ fn main() {
     let channel = std::env::var("CHANNEL").expect("No CHANNEL env set");
     let token = std::env::var("TOKEN").expect("No TOKEN env set");
     let name = std::env::var("NAME").expect("No NAME env set");
-    let perms = vec!["commands".to_string()];
+    let perms = vec!["commands".to_string(), "tags".to_string()];
     let channels = vec![channel.to_string()];
 
     let cfg = Config::new(
@@ -17,8 +17,8 @@ fn main() {
 
     let stream = ChatStream::connect(&cfg).unwrap();
     let handle = stream.on_message(|msg| {
-        println!("\nUser - {}\nMessageType - {:?}\nMessage - {}\n", 
-            msg.user, msg.kind, msg.message);
+        println!("\nUser - {}\nMessageType - {:?}\nMessage - {}\nTags - {:#?}\nBadges - {:#?}\n", 
+            msg.user, msg.kind, msg.message, msg.tags.tags, msg.tags.badges);
     });
 
     match handle {
