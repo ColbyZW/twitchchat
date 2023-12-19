@@ -74,7 +74,6 @@ impl ChatStream {
                         let msg = ChatMessage::new(&line, &write_stream);
                         ChatStream::handle_message(&msg, handler);
                     };
-                    thread::sleep(Duration::from_millis(1));
                 }
             });
 
