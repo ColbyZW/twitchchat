@@ -1,4 +1,6 @@
-use twitchchat::{Config, ChatStream};
+use twitchchat::Config;
+use twitchchat::message::MessageType;
+use twitchchat::stream::ChatStream;
 use dotenv::dotenv;
 
 fn main() {
@@ -17,19 +19,16 @@ fn main() {
 
     let stream = ChatStream::connect(&cfg).unwrap();
     let handle = stream.on_message(|msg| {
-        println!("\nUser - {}\nMessageType - {:?}\nMessage - {}\nTags - {:#?}\nBadges - {:#?}\n", 
+        println!("\n\
+            User - {},\n\
+            MessageType - {:?},\n\
+            Message - {},\n\
+            Tags - {:#?},\n\
+            Badges - {:#?}\n", 
             msg.user, msg.kind, msg.message, msg.tags.tags, msg.tags.badges);
     });
 
-    match handle {
-        Ok(handle) => {
-            let _ = handle.join();
-            ()
-        },
-        Err(e) => {
-            println!("Error starting thread: {}", e);
-            ()
-        }
+    if let Ok(handle) = handle {
+        let _ = handle.join();
     };
-    
 }
