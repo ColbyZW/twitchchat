@@ -9,7 +9,12 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(pass: String, nick: String, channels: Vec<String>, perms: Vec<String>) -> Self {
+    pub fn new(
+        pass: String,
+        nick: String,
+        channels: Vec<String>,
+        perms: Vec<String>
+        ) -> Self {
         Self {pass, nick, channels, perms}
     }
 

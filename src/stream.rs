@@ -2,7 +2,6 @@ use std::net::{TcpStream};
 use std::sync::{Mutex, Arc};
 use std::io::{Write, BufRead, BufReader};
 use std::ops::DerefMut;
-use std::thread::JoinHandle;
 use std::thread;
 use std::time::Duration;
 use crate::{Config};
@@ -30,6 +29,11 @@ impl ChatStream {
         } else {
             return Err("Unable to connect to specified URL");
         };
+    }
+
+    pub fn listen(self: &Self) {
+        println!("Now listening to Twitch IRC");
+        loop {}
     }
 
     pub fn ping(msg: &ChatMessage) {
@@ -60,24 +64,27 @@ impl ChatStream {
     pub fn on_message(
         self: &Self, 
         handler: fn(&ChatMessage) -> ()
-        ) -> Result<JoinHandle<()>, &'static str> {
+        ) -> Result<(), &'static str> {
         let stream = self.stream.clone();
 
         if let Ok(write_stream) = self.stream.lock().unwrap().try_clone() {
-            let handle = thread::spawn(move || {
+            thread::spawn(move || {
                 let mut stream = stream.lock().unwrap();
-                let reader = BufReader::new(stream.deref_mut());
+                let mut reader = BufReader::new(stream.deref_mut());
                 let write_stream = Arc::new(Mutex::new(write_stream));
-
-                for res in reader.lines() {
-                    if let Ok(line) = res {
+                loop {
+                    let mut line = String::new();
+                    if let Ok(_) = reader.read_line(&mut line) {
                         let msg = ChatMessage::new(&line, &write_stream);
                         ChatStream::handle_message(&msg, handler);
                     };
+
+                    // Allow other threads to work
+                    thread::sleep(Duration::from_millis(1));
                 }
             });
 
-            Ok(handle)
+            Ok(())
         } else {
             Err("Unable to get Mutable clone of Stream")
         }
@@ -108,7 +115,7 @@ impl ChatStream {
         if let Err(_) = stream.flush() {
             println!("Failed to send messages to Twitch");
         } else {
-            println!("Wrote all messages to twitch!");
+            println!("Performing Auth Handshake");
         }
 
         Ok(())
